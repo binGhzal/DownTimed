@@ -1,0 +1,18 @@
+{
+  "name": "downtimed",
+  "private": true,
+  "packageManager": "pnpm@11.5.1",
+  "scripts": {
+    "dev": "pnpm --filter @downtimed/web dev",
+    "build": "pnpm db:generate && pnpm -r --if-present build",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm db:generate && pnpm -r --if-present typecheck",
+    "db:generate": "pnpm --filter @downtimed/db db:generate",
+    "db:validate": "pnpm --filter @downtimed/db db:validate",
+    "db:migrate": "pnpm --filter @downtimed/db db:migrate",
+    "db:seed": "pnpm --filter @downtimed/db db:seed"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,1 +1,10 @@
 .vscode/
+node_modules/
+.next/
+dist/
+.turbo/
+packages/db/src/generated/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo

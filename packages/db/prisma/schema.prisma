@@ -1,0 +1,363 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MediaType {
+  movie
+  show
+  book
+  game
+  manual
+}
+
+enum UserItemStatus {
+  backlog
+  current
+  done
+  abandoned
+  hidden
+}
+
+enum ProgressType {
+  none
+  percent
+  pages
+  episodes
+  custom
+}
+
+enum Visibility {
+  private
+  unlisted
+  public
+}
+
+enum SyncConflictStatus {
+  open
+  resolved
+  ignored
+}
+
+model User {
+  id               String            @id @default(uuid()) @db.Uuid
+  email            String            @unique
+  displayName      String?           @map("display_name")
+  avatarUrl        String?           @map("avatar_url")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?         @map("deleted_at") @db.Timestamptz(6)
+  userItems        UserItem[]
+  lists            List[]
+  tags             Tag[]
+  externalAccounts ExternalAccount[]
+  syncEvents       SyncEvent[]
+  syncConflicts    SyncConflict[]
+  importJobs       ImportJob[]
+  userItemEvents   UserItemEvent[]
+
+  @@map("users")
+}
+
+model Item {
+  id             String          @id @default(uuid()) @db.Uuid
+  mediaType      MediaType       @map("media_type")
+  title          String
+  subtitle       String?
+  description    String?
+  releaseYear    Int?            @map("release_year")
+  releaseDate    DateTime?       @map("release_date") @db.Date
+  posterUrl      String?         @map("poster_url")
+  backdropUrl    String?         @map("backdrop_url")
+  canonicalKey   String?         @map("canonical_key")
+  metadataSource String?         @map("metadata_source")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  externalIds    ExternalId[]
+  userItems      UserItem[]
+  movieMetadata  MovieMetadata?
+  showMetadata   ShowMetadata?
+  bookMetadata   BookMetadata?
+  gameMetadata   GameMetadata?
+  syncConflicts  SyncConflict[]
+
+  @@map("items")
+}
+
+model ExternalId {
+  id          String   @id @default(uuid()) @db.Uuid
+  itemId      String   @map("item_id") @db.Uuid
+  provider    String
+  externalId  String   @map("external_id")
+  externalUrl String?  @map("external_url")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@map("external_ids")
+}
+
+model UserItem {
+  id               String          @id @default(uuid()) @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  itemId           String          @map("item_id") @db.Uuid
+  status           UserItemStatus
+  progressType     ProgressType    @default(none) @map("progress_type")
+  progressValue    Decimal?        @map("progress_value")
+  progressTotal    Decimal?        @map("progress_total")
+  ratingValue      Int?            @map("rating_value")
+  ratingScale      String?         @map("rating_scale")
+  notes            String?
+  priority         Int?
+  sourceNote       String?         @map("source_note")
+  startedAt        DateTime?       @map("started_at") @db.Timestamptz(6)
+  finishedAt       DateTime?       @map("finished_at") @db.Timestamptz(6)
+  lastInteractedAt DateTime?       @map("last_interacted_at") @db.Timestamptz(6)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?       @map("deleted_at") @db.Timestamptz(6)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item             Item            @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  listItems        ListItem[]
+  userItemTags     UserItemTag[]
+  syncConflicts    SyncConflict[]
+  events           UserItemEvent[]
+
+  @@unique([userId, itemId])
+  @@map("user_items")
+}
+
+model List {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String     @map("user_id") @db.Uuid
+  name        String
+  description String?
+  visibility  Visibility @default(private)
+  sortOrder   Int?       @map("sort_order")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?  @map("deleted_at") @db.Timestamptz(6)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listItems   ListItem[]
+
+  @@map("lists")
+}
+
+model ListItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  listId     String   @map("list_id") @db.Uuid
+  userItemId String   @map("user_item_id") @db.Uuid
+  sortOrder  Int?     @map("sort_order")
+  addedAt    DateTime @default(now()) @map("added_at") @db.Timestamptz(6)
+  list       List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  userItem   UserItem @relation(fields: [userItemId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, userItemId])
+  @@map("list_items")
+}
+
+model Tag {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
+  name         String
+  slug         String
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userItemTags UserItemTag[]
+
+  @@unique([userId, slug])
+  @@map("tags")
+}
+
+model UserItemTag {
+  userItemId String   @map("user_item_id") @db.Uuid
+  tagId      String   @map("tag_id") @db.Uuid
+  userItem   UserItem @relation(fields: [userItemId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([userItemId, tagId])
+  @@map("user_item_tags")
+}
+
+model MovieMetadata {
+  itemId              String   @id @map("item_id") @db.Uuid
+  runtimeMinutes      Int?     @map("runtime_minutes")
+  originalTitle       String?  @map("original_title")
+  genres              String[]
+  productionCountries String[] @map("production_countries")
+  item                Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("movie_metadata")
+}
+
+model ShowMetadata {
+  itemId       String    @id @map("item_id") @db.Uuid
+  firstAirDate DateTime? @map("first_air_date") @db.Date
+  lastAirDate  DateTime? @map("last_air_date") @db.Date
+  seasonCount  Int?      @map("season_count")
+  episodeCount Int?      @map("episode_count")
+  status       String?
+  genres       String[]
+  item         Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("show_metadata")
+}
+
+model BookMetadata {
+  itemId        String   @id @map("item_id") @db.Uuid
+  authors       String[]
+  publisher     String?
+  publishedDate String?  @map("published_date")
+  pageCount     Int?     @map("page_count")
+  isbn10        String?  @map("isbn_10")
+  isbn13        String?  @map("isbn_13")
+  language      String?
+  item          Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("book_metadata")
+}
+
+model GameMetadata {
+  itemId               String   @id @map("item_id") @db.Uuid
+  platforms            String[]
+  developers           String[]
+  publishers           String[]
+  genres               String[]
+  averagePlaytimeHours Decimal? @map("average_playtime_hours")
+  item                 Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("game_metadata")
+}
+
+model ExternalAccount {
+  id                    String       @id @default(uuid()) @db.Uuid
+  userId                String       @map("user_id") @db.Uuid
+  provider              String
+  providerUserId        String?      @map("provider_user_id")
+  providerUsername      String?      @map("provider_username")
+  accessTokenEncrypted  String?      @map("access_token_encrypted")
+  refreshTokenEncrypted String?      @map("refresh_token_encrypted")
+  tokenExpiresAt        DateTime?    @map("token_expires_at") @db.Timestamptz(6)
+  syncEnabled           Boolean      @default(true) @map("sync_enabled")
+  lastSyncedAt          DateTime?    @map("last_synced_at") @db.Timestamptz(6)
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  disconnectedAt        DateTime?    @map("disconnected_at") @db.Timestamptz(6)
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  syncCursors           SyncCursor[]
+  syncEvents            SyncEvent[]
+
+  @@unique([userId, provider])
+  @@map("external_accounts")
+}
+
+model SyncCursor {
+  id                String          @id @default(uuid()) @db.Uuid
+  externalAccountId String          @map("external_account_id") @db.Uuid
+  resourceType      String          @map("resource_type")
+  cursorValue       String?         @map("cursor_value")
+  lastSuccessAt     DateTime?       @map("last_success_at") @db.Timestamptz(6)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  externalAccount   ExternalAccount @relation(fields: [externalAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([externalAccountId, resourceType])
+  @@map("sync_cursors")
+}
+
+model SyncEvent {
+  id                String           @id @default(uuid()) @db.Uuid
+  userId            String           @map("user_id") @db.Uuid
+  externalAccountId String?          @map("external_account_id") @db.Uuid
+  provider          String
+  direction         String
+  status            String
+  startedAt         DateTime         @map("started_at") @db.Timestamptz(6)
+  finishedAt        DateTime?        @map("finished_at") @db.Timestamptz(6)
+  itemsSeen         Int              @default(0) @map("items_seen")
+  itemsCreated      Int              @default(0) @map("items_created")
+  itemsUpdated      Int              @default(0) @map("items_updated")
+  itemsSkipped      Int              @default(0) @map("items_skipped")
+  itemsFailed       Int              @default(0) @map("items_failed")
+  errorCode         String?          @map("error_code")
+  errorMessage      String?          @map("error_message")
+  summary           Json?
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalAccount   ExternalAccount? @relation(fields: [externalAccountId], references: [id])
+
+  @@map("sync_events")
+}
+
+model SyncConflict {
+  id          String             @id @default(uuid()) @db.Uuid
+  userId      String             @map("user_id") @db.Uuid
+  provider    String
+  itemId      String?            @map("item_id") @db.Uuid
+  userItemId  String?            @map("user_item_id") @db.Uuid
+  fieldName   String             @map("field_name")
+  localValue  Json?              @map("local_value")
+  remoteValue Json?              @map("remote_value")
+  baseValue   Json?              @map("base_value")
+  status      SyncConflictStatus
+  resolution  String?
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt  DateTime?          @map("resolved_at") @db.Timestamptz(6)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item        Item?              @relation(fields: [itemId], references: [id])
+  userItem    UserItem?          @relation(fields: [userItemId], references: [id])
+
+  @@map("sync_conflicts")
+}
+
+model ImportJob {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  source        String
+  filename      String?
+  status        String
+  totalRows     Int?      @map("total_rows")
+  processedRows Int?      @map("processed_rows")
+  createdCount  Int?      @map("created_count")
+  updatedCount  Int?      @map("updated_count")
+  skippedCount  Int?      @map("skipped_count")
+  failedCount   Int?      @map("failed_count")
+  errorMessage  String?   @map("error_message")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt    DateTime? @map("finished_at") @db.Timestamptz(6)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("import_jobs")
+}
+
+model ProviderCache {
+  id        String   @id @default(uuid()) @db.Uuid
+  provider  String
+  cacheKey  String   @map("cache_key")
+  response  Json
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([provider, cacheKey])
+  @@map("provider_cache")
+}
+
+model UserItemEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  userItemId String   @map("user_item_id") @db.Uuid
+  eventType  String   @map("event_type")
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  source     String
+  provider   String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userItem   UserItem @relation(fields: [userItemId], references: [id], onDelete: Cascade)
+
+  @@map("user_item_events")
+}
